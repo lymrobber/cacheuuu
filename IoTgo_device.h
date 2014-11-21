@@ -22,7 +22,7 @@
 #include "Dev_Light.h"
 
 #include "Dev_THSensor.h"
-#include "HW_SHT1x.h"
+
 
 #endif /* #ifndef __IOTGO_DEVICE_H__ */
 

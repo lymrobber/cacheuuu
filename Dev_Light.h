@@ -16,6 +16,8 @@
 #ifndef __DEV_LIGHT_H__
 #define __DEV_LIGHT_H__
 
+#include <itead.h>
+
 #include "IoTgo.h"
 
 /**

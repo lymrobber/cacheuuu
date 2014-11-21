@@ -16,7 +16,7 @@
 #ifndef __THSENSORINTERFACE_H__
 #define __THSENSORINTERFACE_H__
 
-#include <Arduino.h>
+#include <stdint.h>
 
 #include "IoTgo_error.h"
 

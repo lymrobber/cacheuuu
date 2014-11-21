@@ -16,6 +16,25 @@
 #ifndef __IOTGO_DEBUG_H__
 #define __IOTGO_DEBUG_H__
 
+#include <stdio.h>
+
 //#define DEBUG
+#ifdef DEBUG
+#define IoTgo_debug(fmt, args...)	\
+    do {                                                                    \
+		printf("\n[IoTgo DEBUG:%s,%d,%s]-> ",__FILE__,__LINE__,__FUNCTION__);\
+		printf(fmt, ##args);\
+		printf("\n");
+    } while(0)
+#else
+#define IoTgo_debug(fmt, args...)   do{}while(0)
+#endif
+
+#define IoTgo_perror(fmt, args...)	\
+    do {                                                                    \
+        printf("\n[IoTgo ERROR:%s,%d,%s]-> ",__FILE__,__LINE__,__FUNCTION__);\
+        printf(fmt, ##args);\
+        printf("\n");
+    } while(0)
 
 #endif /* #ifndef __IOTGO_DEBUG_H__ */

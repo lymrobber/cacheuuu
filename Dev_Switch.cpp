@@ -55,8 +55,7 @@ int32_t Switch::sync(void)
     }
     else
     {
-        DebugSerial.print("\ngetState() error: ret = ");
-        DebugSerial.println(ret);
+        IoTgo_perror("getState() error: ret = %d", ret);
     }
     return ret;
 }

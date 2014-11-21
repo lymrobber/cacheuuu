@@ -16,6 +16,8 @@
 #ifndef __DEV_SWITCH_H__
 #define __DEV_SWITCH_H__
 
+#include <itead.h>
+
 #include "IoTgo.h"
 
 /**

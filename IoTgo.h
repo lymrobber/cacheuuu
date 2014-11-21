@@ -16,11 +16,12 @@
 #ifndef __ITEADIOT_H__
 #define __ITEADIOT_H__
 
+#include <Python.h>
 #include <string.h>
-#include <SoftwareSerial.h>
 
-#include "Eth_ESP8266.h"
+#include "IoTgo_debug.h"
 #include "IoTgo_error.h"
+
 
 /**
  * @addtogroup IoTgo
@@ -59,25 +60,20 @@ class IoTgo
 {
 public: /* public methods */
     IoTgo(void);
-    void setServer(const char *server);
-    bool connectWiFi(const char *ssid, const char *password);
-    
-    const char *init(const char *device_id, const char *apikey, 
+    ~IoTgo(void);
+    const char *init(const char *device_id, const char *apikey_like, 
         IoTgoDeviceType device_type = DEVICE_DIY);
     const char *query(const char *params[]);
     const char *update(const char *params[], const char *values[]);
 
-  
-private: /* private methods */  
-    const char * request(const char *http_body, char *const buffer, int32_t len);
-    
+private: /* static data shared with all objects */
+    static int refcount;
+    static int imported;
+    static PyObject *pymod_name;
+    static PyObject *pymod;
 
 private: /* private datas */
-    WIFI wifi;
     char buffer[IOT_BUFFER_SIZE];
-    char apikey[APIKEY_LEN + 1];
-    char device_id[DEVICE_ID_LEN + 1];
-    char server[20];
 };
 
 /** @} */

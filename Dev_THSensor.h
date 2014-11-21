@@ -16,6 +16,8 @@
 #ifndef __DEV_THSENSOR_H__
 #define __DEV_THSENSOR_H__
 
+#include <itead.h>
+
 #include "IoTgo.h"
 #include "Dev_THSensorInterface.h"
 

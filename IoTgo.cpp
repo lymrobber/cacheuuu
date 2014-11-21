@@ -15,165 +15,46 @@
 
 #include "IoTgo.h"
 
+int IoTgo::refcount = 0;
+int IoTgo::imported = 0;
+PyObject *IoTgo::pymod_name = NULL;
+PyObject *IoTgo::pymod = NULL;
+
+
 /**
  * Constructor. 
  */
 IoTgo::IoTgo(void)
 {
     memset(buffer, '\0', sizeof(buffer));
-    memset(apikey, '\0', sizeof(apikey));
-    memset(device_id, '\0', sizeof(device_id));
-    strcpy(server, "172.16.7.6");
+    
+    refcount++;
+    if (imported == 0)
+    {
+        Py_Initialize();
+        PySys_SetArgv(0,(char **)"");
+        pymod_name = PyString_FromString("IoTgo_module");
+        pymod = PyImport_Import(pymod_name);
+        assert(pymod != NULL);
+        Py_XDECREF(pymod_name);
+        imported = 1;
+        IoTgo_debug("Module initialize\n");
+    }
 }
 
 /**
- * Set IoT Server. 
- * 
- * @param server - IP address of server
- * @return void
+ * Destructor. 
  */
-void IoTgo::setServer(const char *server)
+IoTgo::~IoTgo(void)
 {
-    strcpy(this->server, server);
-}
-
-/**
- * Connect to WiFi. 
- * 
- * @param ssid - WiFi's SSID (Name of WiFi access point)
- * @param password - Passward of SSID
- * @retval true - if connected
- * @retval false - if failed
- */
-bool IoTgo::connectWiFi(const char *ssid, const char *password)
-{
-    wifi.begin();
-    if(!wifi.Initialize(STA, String(ssid), String(password)))
+    refcount--;
+    if(refcount == 0)
     {
-        DebugSerial.print("connect to ");
-        DebugSerial.print(ssid);
-        DebugSerial.println(" failed!");
-        return false;
+        Py_XDECREF(pymod);
+        Py_Finalize();
+        imported = 0;
+        IoTgo_debug("Module finalize\n");
     }
-    DebugSerial.print("Getting IP from ");
-    DebugSerial.print(ssid);
-    DebugSerial.println(". Please wait ...");
-    delay(5000);
-    DebugSerial.println(wifi.showIP());
-
-    return true;
-}
-
-/**
- * Send http request to iotgo.iteadstudio.com and get the response. 
- * 
- * @param http_body - the body of http request
- * @param buffer - the buffer to store the response of this request
- * @param len - the length of buffer
- *
- * @return the pointer of response buffer terminated with '\0', if success. NULL, if falied!
- *
- * @warning 
- *  You must deal with the response in buffer BEFORE next calling of this function as
- *  the buffer is shared. 
- */
-const char * IoTgo::request(const char *http_body, char *const buffer, 
-    int32_t len)
-{
-    static int32_t counter = 0;
-    static bool connectTCP = false;
-    
-    int32_t time_delay = 0; 
-    int32_t reconnectTCP = 0;
-    
-    if (buffer == NULL)
-    {
-        DebugSerial.println("buffer cannot be NULL!");
-        return NULL;
-    }
-    
-    buffer[0] = '\0';
-    
-request_reconnect:    
-    if (connectTCP == false && wifi.ipConfig(TCP, server, 80))
-    {
-        connectTCP = true;
-    } 
-    if (connectTCP == false)
-    {
-        DebugSerial.println("Cannot connect to server");
-        return NULL;
-    }
-    
-    if (connectTCP == true) 
-    {
-        String http_req;
-        /* Request line */
-        http_req = "POST /api/http HTTP/1.1\r\n";
-        /* Http header */
-        http_req += "Host: iotgo.iteadstudio.com\r\n";
-        http_req += "Content-Type: application/json\r\n";
-        http_req += "Content-Length: " + String(strlen(http_body));
-        http_req += "\r\n\r\n";
-        /* Http body */
-        http_req += http_body;
-#ifdef DEBUG
-        DebugSerial.print("http_req=[");
-        DebugSerial.print(http_req);
-        DebugSerial.println("]");
-#endif        
-        bool sent = wifi.Send(http_req);
-        if (sent == true)
-        {
-            //DebugSerial.println("Request Sent Successfully!");
-        }
-        else
-        {
-            if ((reconnectTCP++) < 5)
-            {
-                connectTCP = false;
-                goto request_reconnect;
-            }
-            else
-            {
-                DebugSerial.println("Request Sending Failed!");
-                return NULL;
-            }
-        }
-        
-        /* Waiting for response for 10 seconds */ 
-        time_delay = 1000;
-        while (time_delay--)
-        {   
-            if (wifi.ReceiveMessage(buffer))
-            {
-                //DebugSerial.print("Received:\n");
-                //DebugSerial.print(buffer);
-                break;
-            }
-            delay(10);
-        }
-        if (time_delay <= 0)
-        {
-            DebugSerial.println("Request timeout!");
-            return NULL;
-        }
-    }
-    
-    buffer[len - 1] = '\0';
-    
-    //DebugSerial.print("request counter=");
-    //DebugSerial.println(++counter);
-    //DebugSerial.print("time_delay=");
-    //DebugSerial.println(time_delay);
-    //DebugSerial.print("strlen(buffer)=");
-    //DebugSerial.println(strlen(buffer));
-    
-#ifdef DEBUG
-    DebugSerial.println(buffer);
-#endif    
-
-    return buffer;
 }
 
 /**
@@ -197,68 +78,48 @@ request_reconnect:
 const char *IoTgo::init(const char *device_id, const char *apikey_like, 
     IoTgoDeviceType device_type)
 {
-    char http_body[100];
-    char *temp;
-    const char *response;
-    
-    strcpy(this->device_id, device_id);
-    
-    if (device_type == DEVICE_PRODUCT)
+    PyObject *pyfun;
+    PyObject *pyargs;
+    PyObject *pyret;
+
+    const char *ret;
+        
+    pyfun = PyObject_GetAttrString(pymod, "init");
+    if (pyfun && PyCallable_Check(pyfun))
     {
-        /* Construct init http_body */
-        strcpy(http_body, "{");
-        strcat(http_body, "\"apikey\":");
-        strcat(http_body, "\"");
-        strcat(http_body, apikey_like);
-        strcat(http_body, "\"");
-        strcat(http_body, ",");
-        strcat(http_body, "\"deviceid\":");
-        strcat(http_body, "\"");
-        strcat(http_body, this->device_id);
-        strcat(http_body, "\"");
-        strcat(http_body, ",");
-        strcat(http_body, "\"action\":\"register\"");
-        strcat(http_body, "}");
+        pyargs = Py_BuildValue("(ssi)", device_id, apikey_like, device_type);
+        pyret = PyObject_CallObject(pyfun, pyargs);
+        Py_XDECREF(pyargs);
+
+        ret = PyString_AsString(pyret);
+
+        IoTgo_debug("ret = %s\n", ret);
         
-        /* {"error":0,"apikey":"d0555f12-a67c-4c54-9ee0-8f5b7f4268fa"} */
-        
-        response = request(http_body, buffer, sizeof(buffer));
-        if (response == NULL)
+        ret = strstr(ret, "apikey");
+        if (ret != NULL)
         {
-            DebugSerial.println("request failed!");
-            return NULL;
-        }
-        
-        temp = strstr(response, "apikey");
-        if (temp == NULL)
-        {
-            DebugSerial.println("Cannot find \"apikey\" from response!");
-            return NULL;
+            ret += 9;/* {"error":0,"apikey":"0783eab8-0641-421f-83fd-31c19f844b69"} */
+            strncpy(buffer, ret, APIKEY_LEN);
         }
         else
         {
-            temp += 7;
-            char *apikey_index = strstr(temp, "\"");
-            if (apikey_index != NULL)
-            {
-                apikey_index += 1;
-                strncpy(this->apikey, apikey_index, APIKEY_LEN);
-                //DebugSerial.print("apikey=");
-                //DebugSerial.println(this->apikey);
-            }
+            Py_XDECREF(pyret);
+            Py_XDECREF(pyfun);
+            IoTgo_perror("python:init() failed!");
+            return NULL;
         }
-        return this->apikey;
-    }
-    else if (device_type == DEVICE_DIY)
-    {
-        strncpy(this->apikey, apikey_like, APIKEY_LEN);
-        return this->apikey;
+        Py_XDECREF(pyret);
+        
     }
     else
     {
-        DebugSerial.println("Unknown device flag!");
+        Py_XDECREF(pyfun);
+        IoTgo_perror("Cannot call python:init()!");
         return NULL;
     }
+    Py_XDECREF(pyfun);
+    
+    return buffer;
 }
 
 /**
@@ -272,38 +133,63 @@ const char *IoTgo::init(const char *device_id, const char *apikey_like,
  */
 const char *IoTgo::query(const char *params[])
 {
-    char http_body[100+IOT_BUFFER_SIZE];
-    int32_t i;
+    PyObject *pyfun;
+    PyObject *pyargs;
+    PyObject *pyret;
+    PyObject *pyitem;
+    PyObject *pylist;
     
-    /* Construct query http_body */
-    strcpy(http_body, "{");
-    strcat(http_body, "\"apikey\":");
-    strcat(http_body, "\"");
-    strcat(http_body, this->apikey);
-    strcat(http_body, "\"");
-    strcat(http_body, ",");
-    strcat(http_body, "\"deviceid\":");
-    strcat(http_body, "\"");
-    strcat(http_body, this->device_id);
-    strcat(http_body, "\"");
-    strcat(http_body, ",");
-    strcat(http_body, "\"action\":\"query\"");
-    strcat(http_body, ",");
-    strcat(http_body, "\"params\":[");
-    for (i=0; params[i] != NULL; i++)
+    const char *ret;
+
+    int params_cnt = 0;
+    int i=0;
+
+    pyfun = PyObject_GetAttrString(pymod, "query");
+    if (pyfun && PyCallable_Check(pyfun))
     {
-        strcat(http_body, "\"");
-        strcat(http_body, params[i]);
-        strcat(http_body, "\"");
-        if (params[i+1] != NULL)
+        IoTgo_debug("params_cnt = %d\n", i);
+        if (params == NULL)
         {
-            strcat(http_body, ",");
+            params_cnt = 0;
         }
+        else
+        {
+            for (i=0; params[i] != NULL; i++)
+            {
+                //printf("params[%d]=%s\n", i, params[i]);
+            }
+            params_cnt = i;
+        }
+        IoTgo_debug("params_cnt = %d\n", params_cnt);
+        
+        pylist = PyList_New(params_cnt);
+        for (i=0; i<params_cnt; i++) 
+        {
+            pyitem = PyString_FromString(params[i]);
+            PyList_SetItem(pylist, i, pyitem);
+        }
+        
+        pyargs = Py_BuildValue("(O)", pylist);
+        pyret = PyObject_CallObject(pyfun, pyargs);
+        Py_XDECREF(pyargs);
+        Py_XDECREF(pylist);
+
+        ret = PyString_AsString(pyret);
+        //printf("ret = %s\n", ret);
+        
+        strncpy(buffer, ret, sizeof(buffer)-1);
+        Py_XDECREF(pyret);
+        
+    }  
+    else
+    {
+        Py_XDECREF(pyfun);
+        IoTgo_perror("Cannot call python:query()!\n");
+        return NULL;
     }
-    strcat(http_body, "]");
-    strcat(http_body, "}");
+    Py_XDECREF(pyfun);
     
-    return request(http_body, buffer, sizeof(buffer));;
+    return buffer;
 }
 
 /**
@@ -321,40 +207,51 @@ const char *IoTgo::query(const char *params[])
  */
 const char *IoTgo::update(const char *params[], const char *values[])
 {
-    char http_body[100+IOT_BUFFER_SIZE];
-    int32_t i;
+    PyObject *pyfun;
+    PyObject *pyargs;
+    PyObject *pyret;
+    PyObject *pyitem;
+    PyObject *pydict;
     
-    /* Construct update http_body */
-    strcpy(http_body, "{");
-    strcat(http_body, "\"apikey\":");
-    strcat(http_body, "\"");
-    strcat(http_body, this->apikey);
-    strcat(http_body, "\"");
-    strcat(http_body, ",");
-    strcat(http_body, "\"deviceid\":");
-    strcat(http_body, "\"");
-    strcat(http_body, this->device_id);
-    strcat(http_body, "\"");
-    strcat(http_body, ",");
-    strcat(http_body, "\"action\":\"update\"");
-    strcat(http_body, ",");
-    strcat(http_body, "\"params\":{");
-    for (i=0; (params[i] != NULL && values[i] != NULL); i++)
-    {
-        strcat(http_body, "\"");
-        strcat(http_body, params[i]);
-        strcat(http_body, "\"");
-        strcat(http_body, ":");
-        strcat(http_body, "\"");
-        strcat(http_body, values[i]);
-        strcat(http_body, "\"");
-        if (params[i+1] != NULL && values[i+1] != NULL)
-        {
-            strcat(http_body, ",");
-        }
-    }
-    strcat(http_body, "}");
-    strcat(http_body, "}");
+    const char *ret;
 
-    return request(http_body, buffer, sizeof(buffer));
+    int params_cnt = 0;
+    int i=0;
+
+    pyfun = PyObject_GetAttrString(pymod, "update");
+    if (pyfun && PyCallable_Check(pyfun))
+    {
+        for (i=0; params[i] != NULL; i++)
+        {
+            //printf("params[%d]=%s\n", i, params[i]);
+        }
+        params_cnt = i;
+        pydict = PyDict_New();
+        for (i=0; i<params_cnt; i++) 
+        {
+            pyitem = PyString_FromString(values[i]);
+            PyDict_SetItemString(pydict, params[i], pyitem);
+        }
+        
+        pyargs = Py_BuildValue("(O)", pydict);
+        pyret = PyObject_CallObject(pyfun, pyargs);
+        Py_XDECREF(pyargs);
+        Py_XDECREF(pydict);
+        
+        ret = PyString_AsString(pyret);
+        //printf("ret = %s\n", ret);
+        
+        strncpy(buffer, ret, sizeof(buffer) - 1);
+        Py_XDECREF(pyret);
+        
+    }  
+    else
+    {
+        Py_XDECREF(pyfun);
+        IoTgo_perror("Cannot call python:update()!\n");
+        return NULL;
+    }
+    Py_XDECREF(pyfun);
+    
+    return buffer;
 }

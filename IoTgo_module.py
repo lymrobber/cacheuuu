@@ -3,7 +3,7 @@
 
 '''
 /**
- * @file iteadiot.py
+ * @file IoTgo.py
  *
  * Provide the implementation of ITEAD IoT API
  *
@@ -23,6 +23,9 @@ import httplib, json
 _check_code = "invalid"
 _deviceid = "invalid"
 _apikey = "invalid"
+
+_DEVICE_TYPE_DIY     = 0
+_DEVICE_TYPE_PRODUCT = 1
     
 def _post(body):
     host = "iotgo.iteadstudio.com"
@@ -41,31 +44,37 @@ def _post(body):
     return ret
     
 
-def init(deviceid, check_code):
+def init(deviceid, check_code, device_type = _DEVICE_TYPE_DIY):
     global _check_code
     global _deviceid
     global _apikey
+    
     _check_code = check_code
     _deviceid = deviceid
     _apikey = "invalid"
     
-    body = {}
-    body["action"] = "register"
-    body["apikey"] = _check_code
-    body["deviceid"] = _deviceid
-    body = json.dumps(body)
-    ret = _post(body)
-    
-    if ret["status"] == 200:
-        data = ret["data"]
-        error_index = data.find("\"error\":0")
-        if error_index != -1:
-            apikey_index = data.find("\"apikey\":")
-            _apikey = data[apikey_index + 10:apikey_index + 10 + 35 + 1]
-            return ret["data"]
+    if device_type == _DEVICE_TYPE_DIY:
+        _apikey = _check_code
+        return "\"apikey\":" + "\"" + _apikey + "\""
+        
+    elif device_type == _DEVICE_TYPE_PRODUCT:
+        body = {}
+        body["action"] = "register"
+        body["apikey"] = _check_code
+        body["deviceid"] = _deviceid
+        body = json.dumps(body)
+        ret = _post(body)
+        
+        if ret["status"] == 200:
+            data = ret["data"]
+            error_index = data.find("\"error\":0")
+            if error_index != -1:
+                apikey_index = data.find("\"apikey\":")
+                _apikey = data[apikey_index + 10:apikey_index + 10 + 35 + 1]
+                return "\"apikey\":" + "\"" + _apikey + "\""
+                
     return "failed"
-    
-
+  
 def query(params):
     body = {}
     body["action"] = "query"
@@ -99,10 +108,10 @@ def update(params):
         return "failed"
 
 def main():
-    print init("0100000001", "a360775e-9870-46d7-b203-304b71936e48")
-    print update({"switch":"on"})
-    print query(["switch"])
-    print update({"switch":"off"})
-    print query(["switch"])
+    print init("0000000001", "9bed6c2c-fbc6-4400-9ef8-087f9f0d996e")
+    print update({"state":"on"})
+    print query(["state"])
+    print update({"state":"off"})
+    print query(["state"])
     
 if __name__ == "__main__": main()

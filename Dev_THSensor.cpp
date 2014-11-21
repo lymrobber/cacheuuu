@@ -29,7 +29,7 @@ THSensor::THSensor(THSensorInterface *sensor)
     }
     else
     {
-        DebugSerial.println("ERROR: Parameter sensor is NULL!");
+        IoTgo_perror("Parameter sensor is NULL!");
     }
 }
 
@@ -82,17 +82,14 @@ int32_t THSensor::sync(void)
     if (ret)
     {
 #ifdef DEBUG
-        DebugSerial.print("getAll() =");
-        DebugSerial.println(ret);
+        IoTgo_debug("getAll() = %d", ret);
 #endif
         return ERR_NO_DEVICES_AVAILABLE;
     }
     
 #ifdef DEBUG    
-    DebugSerial.print("temp_c=");
-    DebugSerial.println(temp_c, 2);
-    DebugSerial.print("hum=");
-    DebugSerial.println(hum, 2);
+    IoTgo_debug("temp_c=%.2f", temp_c);
+    IoTgo_debug("hum=%.2f", hum);
 #endif
 
     temp_c += 0.005;
@@ -111,10 +108,8 @@ int32_t THSensor::sync(void)
     strcat(str_hum, &str_tmp[len-2]);
     
 #ifdef DEBUG
-    DebugSerial.print("str_temp_c=");
-    DebugSerial.println(str_temp_c);
-    DebugSerial.print("str_hum=");
-    DebugSerial.println(str_hum);
+    IoTgo_debug("str_temp_c=%s", str_temp_c);
+    IoTgo_debug("str_hum=%s", str_hum);
 #endif
     
     response = update(params, values);
